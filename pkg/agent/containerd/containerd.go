@@ -31,13 +31,19 @@ import (
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
 
+// ExitFunc defines the behavior of k3s once the containerd process exits.
+// If unset, this function will default to os.Exit.
+var ExitFunc func(code int)
+
 // Run configures and starts containerd as a child process. Once it is up, images are preloaded
 // or pulled from files found in the agent images directory.
 func Run(ctx context.Context, cfg *config.Node) error {
 	if err := setupContainerdConfig(ctx, cfg); err != nil {
 		return err
 	}
-
+	if ExitFunc == nil {
+		ExitFunc = os.Exit
+	}
 	args := getContainerdArgs(cfg)
 	stdOut := io.Writer(os.Stdout)
 	stdErr := io.Writer(os.Stderr)
@@ -95,7 +101,7 @@ func Run(ctx context.Context, cfg *config.Node) error {
 		if err := cmd.Run(); err != nil {
 			logrus.Errorf("containerd exited: %s", err)
 		}
-		os.Exit(1)
+		ExitFunc(1)
 	}()
 
 	if err := cri.WaitForService(ctx, cfg.Containerd.Address, "containerd"); err != nil {
